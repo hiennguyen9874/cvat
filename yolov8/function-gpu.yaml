@@ -111,7 +111,7 @@ spec:
         - kind: WORKDIR
           value: /opt/nuclio
         - kind: RUN
-          value: pip3 install --upgrade ultralytics opencv-python torch supervision scikit-image numpy<2.0
+          value: pip3 install --upgrade ultralytics opencv-python torch supervision scikit-image 'numpy<2'
         - kind: RUN
           value: ln -s /usr/bin/pip3 /usr/local/bin/pip
         - kind: RUN

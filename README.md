@@ -83,11 +83,11 @@ Download and install the Nuclio CLI tool:
 
 ```bash
 # Download nuclio
-wget https://github.com/nuclio/nuclio/releases/download/1.14.8/nuctl-1.14.8-linux-amd64
+wget https://github.com/nuclio/nuclio/releases/download/1.13.0/nuctl-1.13.0-linux-amd64
 
 # Set permissions and create symlink
-sudo chmod +x nuctl-1.14.8-linux-amd64
-sudo ln -sf $(pwd)/nuctl-1.14.8-linux-amd64 /usr/local/bin/nuctl
+sudo chmod +x nuctl-1.13.0-linux-amd64
+sudo ln -sf $(pwd)/nuctl-1.13.0-linux-amd64 /usr/local/bin/nuctl
 ```
 
 ### 3. Deploy AI Models
