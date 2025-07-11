@@ -31,4 +31,8 @@ sudo ln -sf $(pwd)/nuctl-1.13.0-linux-amd64 /usr/local/bin/nuctl
 
 - `docker ps | grep nuclio`
 - `docker stop 0570c7cb814a`
-- `nuctl delete function yolov8 --namespace nuclio`
+- `nuctl delete function yolov8-traffic --namespace nuclio`
+
+## Dashboard
+
+- [localhost:8070](http://localhost:8070)
