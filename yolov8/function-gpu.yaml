@@ -1,8 +1,8 @@
 metadata:
-  name: custom-model-yolov8
+  name: yolov8
   namespace: cvat
   annotations:
-    name: custom-model-yolov8
+    name: yolov8
     type: detector
     framework: pytorch
     spec: |
@@ -89,13 +89,13 @@ metadata:
         { "id": 79, "name": "toothbrush", "type": "rectangle" }
       ]
 spec:
-  description: custom-model-yolov8
+  description: yolov8
   runtime: "python:3.9"
   handler: main:handler
   eventTimeout: 30s
 
   build:
-    image: custom-model-yolov8
+    image: yolov8
     baseImage: ultralytics/ultralytics:latest
 
     directives:

@@ -10,7 +10,7 @@ from ultralytics import YOLO
 # Initialize your model
 def init_context(context):
     context.logger.info("Init context...  0%")
-    model = YOLO("yolov8s.pt")
+    model = YOLO("/models/yolov8/yolov8s.pt")
     context.user_data.model_handler = model
     context.logger.info("Init context...100%")
 
