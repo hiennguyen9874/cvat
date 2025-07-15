@@ -22,9 +22,12 @@ sudo ln -sf $(pwd)/nuctl-1.13.0-linux-amd64 /usr/local/bin/nuctl
 ```
 
 4. Build the docker image and run the container. After it is done, you can use the model right away in the CVAT.
+
    ```
    docker pull ultralytics/ultralytics:latest
    DOCKER_BUILDKIT=1 ./serverless/deploy_gpu.sh yolov8
+
+   DOCKER_BUILDKIT=1 ./serverless/deploy_gpu.sh yolov8-traffic
    ```
 
 ## Stop
