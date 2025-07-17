@@ -35,7 +35,7 @@ def init_context(context):
         context.logger.info(f"Worker {worker_id} using CPU (no GPUs available)")
     
     # Load model
-    model = YOLO("/models/yolov8/yolov8s.pt")
+    model = YOLO("/models/yolo-ppe/iwfmp5rs.pt")
     
     # Move model to the assigned device
     if torch.cuda.is_available():

@@ -1,31 +1,28 @@
 metadata:
-  name: yolov8-traffic
+  name: owlv2
   namespace: cvat
   annotations:
-    name: yolov8-traffic
+    name: owlv2
     type: detector
     framework: pytorch
     spec: |
       [
-        { "id": 0, "name": "motorbike", "type": "rectangle" },
-        { "id": 1, "name": "bus", "type": "rectangle" },
-        { "id": 2, "name": "car", "type": "rectangle" },
-        { "id": 3, "name": "truck", "type": "rectangle" },
-        { "id": 4, "name": "pedestrian", "type": "rectangle" },
-        { "id": 5, "name": "vehicle_others", "type": "rectangle" },
-        { "id": 6, "name": "container_truck", "type": "rectangle" },
-        { "id": 7, "name": "fire", "type": "rectangle" },
-        { "id": 8, "name": "smoke", "type": "rectangle" }
+        { "id": 0, "name": "safety goggles", "type": "rectangle" },
+        { "id": 1, "name": "safety helmet", "type": "rectangle" },
+        { "id": 2, "name": "face mask", "type": "rectangle" },
+        { "id": 3, "name": "safety shoes", "type": "rectangle" },
+        { "id": 4, "name": "safety vest", "type": "rectangle" },
+        { "id": 5, "name": "safety gloves", "type": "rectangle" }
       ]
 spec:
-  description: yolov8-traffic
+  description: OWLv2 Object Detection with Text Prompts
   runtime: "python:3.9"
   handler: main:handler
-  eventTimeout: 30s
+  eventTimeout: 60s
 
   build:
-    image: yolov8-traffic
-    baseImage: ultralytics/ultralytics:latest
+    image: owlv2
+    baseImage: pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime
 
     directives:
       preCopy:
@@ -37,10 +34,12 @@ spec:
           value: apt-get update && apt-get -y install curl git libglib2.0-0
         - kind: RUN
           value: apt-get -y install libgl1-mesa-glx libglib2.0-dev
+        - kind: RUN
+          value: apt-get -y install libgomp1
         - kind: WORKDIR
           value: /opt/nuclio
         - kind: RUN
-          value: pip3 install --upgrade ultralytics opencv-python torch supervision scikit-image 'numpy<2'
+          value: pip3 install --upgrade transformers==4.52.4 opencv-python pillow 'numpy<2' scipy
         - kind: RUN
           value: ln -s /usr/bin/pip3 /usr/local/bin/pip
         - kind: RUN
@@ -50,13 +49,16 @@ spec:
     myHttpTrigger:
       maxWorkers: 4
       kind: "http"
-      workerAvailabilityTimeoutMilliseconds: 10000
+      workerAvailabilityTimeoutMilliseconds: 15000
       attributes:
         maxRequestBodySize: 33554432 # 32MB
 
   resources:
     limits:
       nvidia.com/gpu: 2
+    requests:
+      memory: "4Gi"
+      cpu: "2"
 
   platform:
     attributes:
