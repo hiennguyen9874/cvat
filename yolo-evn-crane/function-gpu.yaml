@@ -1,0 +1,69 @@
+metadata:
+  name: yolo-evn-crane
+  namespace: cvat
+  annotations:
+    name: yolo-evn-crane
+    type: detector
+    framework: pytorch
+    spec: |
+      [
+        { "id": 0, "name": "motorbike", "type": "rectangle" },
+        { "id": 1, "name": "bus", "type": "rectangle" },
+        { "id": 2, "name": "car", "type": "rectangle" },
+        { "id": 3, "name": "truck", "type": "rectangle" },
+        { "id": 4, "name": "pedestrian", "type": "rectangle" },
+        { "id": 5, "name": "vehicle_others", "type": "rectangle" },
+        { "id": 6, "name": "container_truck", "type": "rectangle" },
+        { "id": 7, "name": "fire", "type": "rectangle" },
+        { "id": 8, "name": "smoke", "type": "rectangle" },
+        { "id": 9, "name": "xeui", "type": "rectangle" },
+        { "id": 10, "name": "xecau", "type": "rectangle" },
+        { "id": 11, "name": "xesuachua", "type": "rectangle" }
+      ]
+spec:
+  description: yolo-evn-crane
+  runtime: "python:3.9"
+  handler: main:handler
+  eventTimeout: 30s
+
+  build:
+    image: yolo-evn-crane
+    baseImage: ultralytics/ultralytics:latest
+
+    directives:
+      preCopy:
+        - kind: USER
+          value: root
+        - kind: ENV
+          value: DEBIAN_FRONTEND=noninteractive
+        - kind: RUN
+          value: apt-get update && apt-get -y install curl git libglib2.0-0
+        - kind: RUN
+          value: apt-get -y install libgl1-mesa-glx libglib2.0-dev
+        - kind: WORKDIR
+          value: /opt/nuclio
+        - kind: RUN
+          value: pip3 install --upgrade ultralytics opencv-python torch supervision scikit-image 'numpy<2'
+        - kind: RUN
+          value: ln -s /usr/bin/pip3 /usr/local/bin/pip
+        - kind: RUN
+          value: ln -s /usr/bin/python3 /usr/local/bin/python
+
+  triggers:
+    myHttpTrigger:
+      maxWorkers: 4
+      kind: "http"
+      workerAvailabilityTimeoutMilliseconds: 10000
+      attributes:
+        maxRequestBodySize: 33554432 # 32MB
+
+  resources:
+    limits:
+      nvidia.com/gpu: 2
+
+  platform:
+    attributes:
+      restartPolicy:
+        name: always
+        maximumRetryCount: 3
+      mountMode: volume
