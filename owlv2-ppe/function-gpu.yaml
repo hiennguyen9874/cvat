@@ -1,18 +1,16 @@
 metadata:
-  name: owlv2
+  name: owlv2-ppe
   namespace: cvat
   annotations:
-    name: owlv2
+    name: owlv2-ppe
     type: detector
     framework: pytorch
     spec: |
       [
-        { "id": 0, "name": "safety goggles", "type": "rectangle" },
         { "id": 1, "name": "safety helmet", "type": "rectangle" },
-        { "id": 2, "name": "face mask", "type": "rectangle" },
-        { "id": 3, "name": "safety shoes", "type": "rectangle" },
-        { "id": 4, "name": "safety vest", "type": "rectangle" },
-        { "id": 5, "name": "safety gloves", "type": "rectangle" }
+        { "id": 2, "name": "safety vest", "type": "rectangle" },
+        { "id": 3, "name": "safety pants", "type": "rectangle" },
+        { "id": 4, "name": "safety vest and safety pants", "type": "rectangle" }
       ]
 spec:
   description: OWLv2 Object Detection with Text Prompts
@@ -21,7 +19,7 @@ spec:
   eventTimeout: 60s
 
   build:
-    image: owlv2
+    image: owlv2-ppe
     baseImage: pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime
 
     directives:
