@@ -15,7 +15,8 @@ metadata:
         { "id": 5, "name": "vehicle_others", "type": "rectangle" },
         { "id": 6, "name": "container_truck", "type": "rectangle" },
         { "id": 7, "name": "fire", "type": "rectangle" },
-        { "id": 8, "name": "smoke", "type": "rectangle" }
+        { "id": 8, "name": "smoke", "type": "rectangle" },
+        { "id": 9, "name": "power_outage_sign", "type": "rectangle" }
       ]
 spec:
   description: yolov8-traffic
