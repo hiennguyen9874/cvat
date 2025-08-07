@@ -31,13 +31,16 @@ def calculate_iou(box1, box2):
     return iou
 
 
-def merge_models_results(result1, result2, iou_threshold=0.6):
+def merge_models_results(
+    result1, result2, iou_threshold=0.6, merge_across_classes=False
+):
     """
-    Merge kết quả từ hai mô hình YOLOv8 dựa trên IoU theo từng class
+    Merge kết quả từ hai mô hình YOLOv8 dựa trên IoU theo từng class hoặc tất cả class
 
     Args:
         result1, result2: Kết quả từ hai mô hình YOLOv8
         iou_threshold: Ngưỡng IoU (mặc định 0.6)
+        merge_across_classes: Nếu True, merge boxes qua tất cả class. Nếu False, chỉ merge trong cùng class (mặc định False)
 
     Returns:
         merged_data: Dict chứa boxes, confs, clss đã được merge
@@ -60,50 +63,21 @@ def merge_models_results(result1, result2, iou_threshold=0.6):
     clss1_np = clss1.cpu().numpy() if len(clss1) > 0 else np.empty((0,))
     clss2_np = clss2.cpu().numpy() if len(clss2) > 0 else np.empty((0,))
 
-    # Lấy tất cả class ID có trong cả hai kết quả
-    all_classes = set(clss1_np).union(set(clss2_np))
-
     merged_boxes = []
     merged_confs = []
     merged_clss = []
 
-    # Xử lý từng class riêng biệt
-    for cls in all_classes:
-        # Lấy boxes thuộc class hiện tại
-        cls_mask1 = clss1_np == cls if len(clss1_np) > 0 else np.array([])
-        cls_mask2 = clss2_np == cls if len(clss2_np) > 0 else np.array([])
-
-        cls_boxes1 = (
-            boxes1_np[cls_mask1]
-            if len(boxes1_np) > 0 and len(cls_mask1) > 0
-            else np.empty((0, 4))
-        )
-        cls_boxes2 = (
-            boxes2_np[cls_mask2]
-            if len(boxes2_np) > 0 and len(cls_mask2) > 0
-            else np.empty((0, 4))
-        )
-        cls_confs1 = (
-            confs1_np[cls_mask1]
-            if len(confs1_np) > 0 and len(cls_mask1) > 0
-            else np.empty((0,))
-        )
-        cls_confs2 = (
-            confs2_np[cls_mask2]
-            if len(confs2_np) > 0 and len(cls_mask2) > 0
-            else np.empty((0,))
-        )
-
-        # Danh sách theo dõi boxes đã được match
+    if merge_across_classes:
+        # Merge boxes across all classes (ignore class boundaries)
         matched_indices = set()
 
         # Duyệt qua từng box từ model1
-        for i, box1 in enumerate(cls_boxes1):
+        for i, box1 in enumerate(boxes1_np):
             best_iou = 0
             best_match_idx = -1
 
-            # Tìm box từ model2 có IoU cao nhất
-            for idx, box2 in enumerate(cls_boxes2):
+            # Tìm box từ model2 có IoU cao nhất (bất kể class)
+            for idx, box2 in enumerate(boxes2_np):
                 if idx in matched_indices:
                     continue
 
@@ -115,21 +89,89 @@ def merge_models_results(result1, result2, iou_threshold=0.6):
             # Nếu IoU > ngưỡng, lấy box từ model1 và đánh dấu box2 đã được match
             if best_iou > iou_threshold:
                 merged_boxes.append(box1)
-                merged_confs.append(cls_confs1[i])
-                merged_clss.append(cls)
+                merged_confs.append(confs1_np[i])
+                merged_clss.append(clss1_np[i])
                 matched_indices.add(best_match_idx)
             else:
                 # Không match được, giữ lại box từ model1
                 merged_boxes.append(box1)
-                merged_confs.append(cls_confs1[i])
-                merged_clss.append(cls)
+                merged_confs.append(confs1_np[i])
+                merged_clss.append(clss1_np[i])
 
         # Thêm boxes từ model2 chưa được match
-        for idx, box2 in enumerate(cls_boxes2):
+        for idx, box2 in enumerate(boxes2_np):
             if idx not in matched_indices:
                 merged_boxes.append(box2)
-                merged_confs.append(cls_confs2[idx])
-                merged_clss.append(cls)
+                merged_confs.append(confs2_np[idx])
+                merged_clss.append(clss2_np[idx])
+
+    else:
+        # Xử lý từng class riêng biệt (logic gốc)
+        # Lấy tất cả class ID có trong cả hai kết quả
+        all_classes = set(clss1_np).union(set(clss2_np))
+
+        for cls in all_classes:
+            # Lấy boxes thuộc class hiện tại
+            cls_mask1 = clss1_np == cls if len(clss1_np) > 0 else np.array([])
+            cls_mask2 = clss2_np == cls if len(clss2_np) > 0 else np.array([])
+
+            cls_boxes1 = (
+                boxes1_np[cls_mask1]
+                if len(boxes1_np) > 0 and len(cls_mask1) > 0
+                else np.empty((0, 4))
+            )
+            cls_boxes2 = (
+                boxes2_np[cls_mask2]
+                if len(boxes2_np) > 0 and len(cls_mask2) > 0
+                else np.empty((0, 4))
+            )
+            cls_confs1 = (
+                confs1_np[cls_mask1]
+                if len(confs1_np) > 0 and len(cls_mask1) > 0
+                else np.empty((0,))
+            )
+            cls_confs2 = (
+                confs2_np[cls_mask2]
+                if len(confs2_np) > 0 and len(cls_mask2) > 0
+                else np.empty((0,))
+            )
+
+            # Danh sách theo dõi boxes đã được match
+            matched_indices = set()
+
+            # Duyệt qua từng box từ model1
+            for i, box1 in enumerate(cls_boxes1):
+                best_iou = 0
+                best_match_idx = -1
+
+                # Tìm box từ model2 có IoU cao nhất
+                for idx, box2 in enumerate(cls_boxes2):
+                    if idx in matched_indices:
+                        continue
+
+                    iou = calculate_iou(box1, box2)
+                    if iou > best_iou:
+                        best_iou = iou
+                        best_match_idx = idx
+
+                # Nếu IoU > ngưỡng, lấy box từ model1 và đánh dấu box2 đã được match
+                if best_iou > iou_threshold:
+                    merged_boxes.append(box1)
+                    merged_confs.append(cls_confs1[i])
+                    merged_clss.append(cls)
+                    matched_indices.add(best_match_idx)
+                else:
+                    # Không match được, giữ lại box từ model1
+                    merged_boxes.append(box1)
+                    merged_confs.append(cls_confs1[i])
+                    merged_clss.append(cls)
+
+            # Thêm boxes từ model2 chưa được match
+            for idx, box2 in enumerate(cls_boxes2):
+                if idx not in matched_indices:
+                    merged_boxes.append(box2)
+                    merged_confs.append(cls_confs2[idx])
+                    merged_clss.append(cls)
 
     return {
         "boxes": np.array(merged_boxes) if merged_boxes else np.empty((0, 4)),
@@ -199,7 +241,11 @@ def handler(context, event):
     result2 = results2[0]
 
     # Merge results using IoU-based algorithm
-    merged_data = merge_models_results(result1, result2, iou_threshold=0.6)
+    # Set merge_across_classes=True to merge boxes across all classes
+    # Set merge_across_classes=False to merge only within the same class (default)
+    merged_data = merge_models_results(
+        result1, result2, iou_threshold=0.6, merge_across_classes=True
+    )
 
     # Get class names from first model (assuming both models have same classes)
     class_name = result1.names
