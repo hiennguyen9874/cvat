@@ -31,6 +31,60 @@ def calculate_iou(box1, box2):
     return iou
 
 
+def nms_on_all_classes(boxes, confs, clss, iou_threshold=0.5):
+    """
+    Apply Non-Maximum Suppression on all classes
+
+    Args:
+        boxes: numpy array of bounding boxes [N, 4] in format [x1, y1, x2, y2]
+        confs: numpy array of confidence scores [N]
+        clss: numpy array of class IDs [N]
+        iou_threshold: IoU threshold for NMS (default 0.5)
+
+    Returns:
+        Dict containing filtered boxes, confs, and clss after NMS
+    """
+    if len(boxes) == 0:
+        return {
+            "boxes": np.empty((0, 4)),
+            "confs": np.empty((0,)),
+            "clss": np.empty((0,)),
+        }
+
+    # Sort by confidence in descending order
+    sorted_indices = np.argsort(confs)[::-1]
+
+    keep_indices = []
+
+    while len(sorted_indices) > 0:
+        # Take the box with highest confidence
+        current_idx = sorted_indices[0]
+        keep_indices.append(current_idx)
+
+        if len(sorted_indices) == 1:
+            break
+
+        # Calculate IoU with remaining boxes
+        current_box = boxes[current_idx]
+        remaining_indices = sorted_indices[1:]
+        remaining_boxes = boxes[remaining_indices]
+
+        # Calculate IoU between current box and all remaining boxes
+        ious = np.array([calculate_iou(current_box, box) for box in remaining_boxes])
+
+        # Keep only boxes with IoU less than threshold
+        keep_mask = ious < iou_threshold
+        sorted_indices = remaining_indices[keep_mask]
+
+    # Return filtered results
+    keep_indices = np.array(keep_indices)
+    return {
+        "boxes": boxes[keep_indices],
+        "confs": confs[keep_indices],
+        "clss": clss[keep_indices],
+    }
+
+
 def merge_models_results(
     result1, result2, iou_threshold=0.6, merge_across_classes=False
 ):
@@ -244,7 +298,15 @@ def handler(context, event):
     # Set merge_across_classes=True to merge boxes across all classes
     # Set merge_across_classes=False to merge only within the same class (default)
     merged_data = merge_models_results(
-        result1, result2, iou_threshold=0.6, merge_across_classes=True
+        result1, result2, iou_threshold=0.5, merge_across_classes=True
+    )
+
+    # Apply NMS on all classes after merging
+    nms_data = nms_on_all_classes(
+        merged_data["boxes"],
+        merged_data["confs"],
+        merged_data["clss"],
+        iou_threshold=0.5,
     )
 
     # Get class names from first model (assuming both models have same classes)
@@ -253,10 +315,8 @@ def handler(context, event):
     detections = []
     threshold = 0.1
 
-    # Process merged results
-    for box, conf, cls in zip(
-        merged_data["boxes"], merged_data["confs"], merged_data["clss"]
-    ):
+    # Process NMS results
+    for box, conf, cls in zip(nms_data["boxes"], nms_data["confs"], nms_data["clss"]):
         label = class_name[int(cls)]
         if conf >= threshold:
             # must be in this format
@@ -269,7 +329,7 @@ def handler(context, event):
                 }
             )
 
-    context.logger.info(f"Merged detection count: {len(detections)}")
+    context.logger.info(f"Final detection count after merge and NMS: {len(detections)}")
     return context.Response(
         body=json.dumps(detections),
         headers={},
