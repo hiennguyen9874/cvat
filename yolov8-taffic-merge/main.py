@@ -261,7 +261,7 @@ def init_context(context):
         context.logger.info(f"Worker {worker_id} using CPU (no GPUs available)")
 
     # Load both models
-    model1 = YOLO("/models/yolov8-taffic/00yy2lq8.pt")
+    model1 = YOLO("/models/yolov8-taffic/nq44m7uc.pt")
     model2 = YOLO("/models/yolov8-taffic/covctrhe.pt")
 
     # Move models to the assigned device
