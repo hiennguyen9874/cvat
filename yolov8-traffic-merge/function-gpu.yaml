@@ -1,8 +1,8 @@
 metadata:
-  name: yolov8-taffic-merge
+  name: yolov8-traffic-merge
   namespace: cvat
   annotations:
-    name: yolov8-taffic-merge
+    name: yolov8-traffic-merge
     type: detector
     framework: pytorch
     spec: |
@@ -19,13 +19,13 @@ metadata:
         { "id": 9, "name": "power_outage_sign", "type": "rectangle" }
       ]
 spec:
-  description: yolov8-taffic-merge
+  description: yolov8-traffic-merge
   runtime: "python:3.9"
   handler: main:handler
   eventTimeout: 30s
 
   build:
-    image: yolov8-taffic-merge
+    image: yolov8-traffic-merge
     baseImage: ultralytics/ultralytics:latest
 
     directives:

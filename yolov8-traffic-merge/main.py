@@ -70,7 +70,9 @@ def nms_on_all_classes(boxes, confs, clss, iou_threshold=0.5):
         remaining_boxes = boxes[remaining_indices]
 
         # Calculate IoU between current box and all remaining boxes
-        ious = np.array([calculate_iou(current_box, box) for box in remaining_boxes])
+        ious = np.array([
+            calculate_iou(current_box, box) for box in remaining_boxes
+        ])
 
         # Keep only boxes with IoU less than threshold
         keep_mask = ious < iou_threshold
@@ -86,7 +88,8 @@ def nms_on_all_classes(boxes, confs, clss, iou_threshold=0.5):
 
 
 def merge_models_results(
-    result1, result2, iou_threshold=0.6, merge_across_classes=False
+    result1, result2, iou_threshold=0.6, merge_across_classes=False,
+    model2_class_filter=None, class_mapping=None
 ):
     """
     Merge kết quả từ hai mô hình YOLOv8 dựa trên IoU theo từng class hoặc tất cả class
@@ -94,11 +97,44 @@ def merge_models_results(
     Args:
         result1, result2: Kết quả từ hai mô hình YOLOv8
         iou_threshold: Ngưỡng IoU (mặc định 0.6)
-        merge_across_classes: Nếu True, merge boxes qua tất cả class. Nếu False, chỉ merge trong cùng class (mặc định False)
+        merge_across_classes: Nếu True, merge boxes qua tất cả class.
+                             Nếu False, chỉ merge trong cùng class (mặc định False)
+        model2_class_filter: List các tên class từ model2 muốn giữ lại.
+                            Nếu None, giữ tất cả class (mặc định None)
+        class_mapping: Dict mapping class names from model2 to model1.
+                      Format: {"model2_class": "model1_class"}
+                      Nếu None, sử dụng exact name matching (mặc định None)
 
     Returns:
         merged_data: Dict chứa boxes, confs, clss đã được merge
+        (clss sử dụng class ID từ model1)
     """
+    # Get class names from both models
+    class_names1 = result1.names
+    class_names2 = result2.names
+    
+    # Create mapping from model2 class names to model1 class IDs
+    # If a class from model2 doesn't exist in model1, it will be ignored
+    class_mapping_2_to_1 = {}
+    for cls2_id, cls2_name in class_names2.items():
+        # Apply class filter if specified
+        if (model2_class_filter is not None and
+                cls2_name not in model2_class_filter):
+            continue
+        
+        # Use custom mapping if provided, otherwise use exact name matching
+        if class_mapping is not None and cls2_name in class_mapping:
+            # Use custom mapping
+            target_cls1_name = class_mapping[cls2_name]
+        else:
+            # Use exact name matching (original behavior)
+            target_cls1_name = cls2_name
+        
+        # Find the target class ID in model1
+        for cls1_id, cls1_name in class_names1.items():
+            if cls1_name == target_cls1_name:
+                class_mapping_2_to_1[cls2_id] = cls1_id
+                break
     # Lấy boxes dưới dạng numpy array
     boxes1 = result1.boxes.data[:, :4] if result1.boxes else torch.empty((0, 4))
     boxes2 = result2.boxes.data[:, :4] if result2.boxes else torch.empty((0, 4))
@@ -152,31 +188,28 @@ def merge_models_results(
                 merged_confs.append(confs1_np[i])
                 merged_clss.append(clss1_np[i])
 
-        # Thêm boxes từ model2 chưa được match
+        # Thêm boxes từ model2 chưa được match, mapping class to model1
         for idx, box2 in enumerate(boxes2_np):
             if idx not in matched_indices:
-                merged_boxes.append(box2)
-                merged_confs.append(confs2_np[idx])
-                merged_clss.append(clss2_np[idx])
+                cls2_id = int(clss2_np[idx])
+                # Only add if the class exists in model1
+                if cls2_id in class_mapping_2_to_1:
+                    merged_boxes.append(box2)
+                    merged_confs.append(confs2_np[idx])
+                    merged_clss.append(class_mapping_2_to_1[cls2_id])
 
     else:
-        # Xử lý từng class riêng biệt (logic gốc)
-        # Lấy tất cả class ID có trong cả hai kết quả
-        all_classes = set(clss1_np).union(set(clss2_np))
+        # Xử lý từng class riêng biệt - chỉ merge classes có cùng tên
+        # Get all classes from model1
+        all_classes = set(clss1_np) if len(clss1_np) > 0 else set()
 
         for cls in all_classes:
-            # Lấy boxes thuộc class hiện tại
+            # Lấy boxes thuộc class hiện tại từ model1
             cls_mask1 = clss1_np == cls if len(clss1_np) > 0 else np.array([])
-            cls_mask2 = clss2_np == cls if len(clss2_np) > 0 else np.array([])
-
+            
             cls_boxes1 = (
                 boxes1_np[cls_mask1]
                 if len(boxes1_np) > 0 and len(cls_mask1) > 0
-                else np.empty((0, 4))
-            )
-            cls_boxes2 = (
-                boxes2_np[cls_mask2]
-                if len(boxes2_np) > 0 and len(cls_mask2) > 0
                 else np.empty((0, 4))
             )
             cls_confs1 = (
@@ -184,11 +217,51 @@ def merge_models_results(
                 if len(confs1_np) > 0 and len(cls_mask1) > 0
                 else np.empty((0,))
             )
-            cls_confs2 = (
-                confs2_np[cls_mask2]
-                if len(confs2_np) > 0 and len(cls_mask2) > 0
-                else np.empty((0,))
-            )
+
+            # Find equivalent class from model2 by name matching or custom mapping
+            equivalent_cls2 = None
+            cls1_name = class_names1.get(cls)
+            if cls1_name:
+                # Apply class filter check
+                if (model2_class_filter is not None and
+                        cls1_name not in model2_class_filter):
+                    # Skip this class from model2 if it's filtered out
+                    equivalent_cls2 = None
+                else:
+                    # Find model2 class that maps to this model1 class
+                    for cls2_id, cls2_name in class_names2.items():
+                        # Check if there's a custom mapping
+                        if (class_mapping is not None and
+                                cls2_name in class_mapping):
+                            if class_mapping[cls2_name] == cls1_name:
+                                equivalent_cls2 = cls2_id
+                                break
+                        else:
+                            # Use exact name matching (original behavior)
+                            if cls2_name == cls1_name:
+                                equivalent_cls2 = cls2_id
+                                break
+            
+            # Get boxes from model2 with equivalent class (if exists)
+            if equivalent_cls2 is not None:
+                cls_mask2 = (
+                    clss2_np == equivalent_cls2 if len(clss2_np) > 0
+                    else np.array([])
+                )
+                cls_boxes2 = (
+                    boxes2_np[cls_mask2]
+                    if len(boxes2_np) > 0 and len(cls_mask2) > 0
+                    else np.empty((0, 4))
+                )
+                cls_confs2 = (
+                    confs2_np[cls_mask2]
+                    if len(confs2_np) > 0 and len(cls_mask2) > 0
+                    else np.empty((0,))
+                )
+            else:
+                # No equivalent class in model2
+                cls_boxes2 = np.empty((0, 4))
+                cls_confs2 = np.empty((0,))
 
             # Danh sách theo dõi boxes đã được match
             matched_indices = set()
@@ -261,8 +334,9 @@ def init_context(context):
         context.logger.info(f"Worker {worker_id} using CPU (no GPUs available)")
 
     # Load both models
-    model1 = YOLO("/models/yolov8-taffic/nq44m7uc.pt")
-    model2 = YOLO("/models/yolov8-taffic/covctrhe.pt")
+    model1 = YOLO("/models/yolov8-traffic/nq44m7uc.pt")
+    # model2 = YOLO("/models/yolov8-traffic/covctrhe.pt")
+    model2 = YOLO("yolo11l.pt")
 
     # Move models to the assigned device
     if torch.cuda.is_available():
@@ -294,11 +368,26 @@ def handler(context, event):
     result1 = results1[0]
     result2 = results2[0]
 
+    # Define class mapping from model2 to model1
+    # This maps class names from model2 to corresponding class names in model1
+    class_mapping = {
+        "person": "pedestrian",
+        "bicycle": "vehicle_others",
+        "car": "car",
+        "motorcycle": "motorbike",
+        "bus": "bus",
+        "truck": "truck"
+    }
+
     # Merge results using IoU-based algorithm
     # Set merge_across_classes=True to merge boxes across all classes
     # Set merge_across_classes=False to merge only within the same class (default)
+    # Use model2_class_filter to specify which classes from model2 to include
+    # Example: model2_class_filter=["person"] to only include person detections
     merged_data = merge_models_results(
-        result1, result2, iou_threshold=0.5, merge_across_classes=True
+        result1, result2, iou_threshold=0.5, merge_across_classes=True,
+        model2_class_filter=['person'],  # Filter specific classes
+        class_mapping=class_mapping  # Map model2 classes to model1 classes
     )
 
     # Apply NMS on all classes after merging
@@ -316,9 +405,13 @@ def handler(context, event):
     threshold = 0.1
 
     # Process NMS results
-    for box, conf, cls in zip(nms_data["boxes"], nms_data["confs"], nms_data["clss"]):
-        label = class_name[int(cls)]
-        if conf >= threshold:
+    for box, conf, cls in zip(
+        nms_data["boxes"], nms_data["confs"], nms_data["clss"]
+    ):
+        cls_id = int(cls)
+        # Only use classes that exist in model1
+        if cls_id in class_name and conf >= threshold:
+            label = class_name[cls_id]
             # must be in this format
             detections.append(
                 {
@@ -329,7 +422,9 @@ def handler(context, event):
                 }
             )
 
-    context.logger.info(f"Final detection count after merge and NMS: {len(detections)}")
+    context.logger.info(
+        f"Final detection count after merge and NMS: {len(detections)}"
+    )
     return context.Response(
         body=json.dumps(detections),
         headers={},
