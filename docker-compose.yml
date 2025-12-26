@@ -421,7 +421,7 @@ volumes:
   cvat_share:
     driver_opts:
       type: none
-      device: /data/hiennx/workspace/cvat/share
+      device: /data/hiennx/workspace/annotation-tools/cvat/share
       o: bind
 
 networks:
