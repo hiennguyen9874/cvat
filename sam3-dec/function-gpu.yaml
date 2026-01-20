@@ -1,0 +1,64 @@
+metadata:
+  name: facebookresearch-sam3-detection
+  namespace: cvat
+  annotations:
+    name: facebookresearch-sam3-detection
+    type: detector
+    framework: pytorch
+    spec: |
+      [
+        { "id": 0, "name": "person", "type": "rectangle" }
+      ]
+spec:
+  description: Interactive object segmentation with Segment-Anything 3
+  runtime: "python:3.9"
+  handler: main:handler
+  eventTimeout: 60s
+
+  build:
+    image: cvat.pth.facebookresearch.sam3
+    baseImage: pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
+
+    directives:
+      preCopy:
+        - kind: USER
+          value: root
+        # disable interactive frontend
+        - kind: ENV
+          value: DEBIAN_FRONTEND=noninteractive
+        - kind: RUN
+          value: apt-get update && apt-get -y install curl git libglib2.0-0
+        - kind: RUN
+          value: apt-get -y install libgl1-mesa-glx libglib2.0-dev
+        # set workdir
+        - kind: WORKDIR
+          value: /opt/nuclio
+        # install basic deps
+        - kind: RUN
+          value: pip3 install torch torchvision torchaudio pycocotools matplotlib onnxruntime onnx scikit-image huggingface_hub opencv-python pillow 'numpy<2' scipy accelerate
+        - kind: RUN
+          value: pip3 install git+https://github.com/huggingface/transformers
+        # map pip3 and python3 to pip and python
+        - kind: RUN
+          value: ln -s /usr/bin/pip3 /usr/local/bin/pip
+        - kind: RUN
+          value: ln -s /usr/bin/python3 /usr/local/bin/python
+
+  triggers:
+    myHttpTrigger:
+      maxWorkers: 2
+      kind: "http"
+      workerAvailabilityTimeoutMilliseconds: 10000
+      attributes:
+        maxRequestBodySize: 33554432 # 32MB
+
+  resources:
+    limits:
+      nvidia.com/gpu: 2
+
+  platform:
+    attributes:
+      restartPolicy:
+        name: always
+        maximumRetryCount: 3
+      mountMode: volume

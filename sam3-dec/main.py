@@ -1,0 +1,97 @@
+import io
+import base64
+import json
+
+import cv2
+import numpy as np
+import torch
+from transformers import Sam3Processor, Sam3Model
+import torch
+
+
+# Initialize your model
+def init_context(context):
+    context.logger.info("Init context...  0%")
+
+    # Get worker ID and number of available GPUs
+    worker_id_raw = getattr(context, "worker_id", 0)  # Get raw worker_id
+    # Convert worker_id to integer if it's a string
+    if isinstance(worker_id_raw, str):
+        worker_id = int(worker_id_raw)
+    else:
+        worker_id = worker_id_raw
+
+    num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+
+    context.logger.info(f"Worker ID: {worker_id}")
+    context.logger.info(f"Number of available GPUs: {num_gpus}")
+
+    # Calculate device ID using modulo operation
+    if num_gpus > 0:
+        device_id = worker_id % num_gpus
+        device = f"cuda:{device_id}"
+        context.logger.info(f"Worker {worker_id} assigned to GPU device: {device}")
+    else:
+        device = "cpu"
+        context.logger.info(f"Worker {worker_id} using CPU (no GPUs available)")
+
+    # Load model
+    model = Sam3Model.from_pretrained("/models/sam3")
+    processor = Sam3Processor.from_pretrained("/models/sam3")
+
+    # Move model to the assigned device
+    if torch.cuda.is_available():
+        model = model.to(device)
+        context.logger.info("Model moved to GPU")
+    else:
+        context.logger.info("GPU not available, using CPU")
+
+    context.user_data.model = model
+    context.user_data.processor = processor
+    context.user_data.device = device
+    context.logger.info("Init context...100%")
+
+
+# Inference endpoint
+def handler(context, event):
+    context.logger.info("Run custom yolov8 model")
+    data = event.body
+    image_buffer = io.BytesIO(base64.b64decode(data["image"]))
+    image = cv2.imdecode(
+        np.frombuffer(image_buffer.getvalue(), np.uint8), cv2.IMREAD_COLOR
+    )
+
+    inputs = context.user_data.processor(
+        images=image, text="person", return_tensors="pt"
+    ).to(context.user_data.device)
+
+    with torch.no_grad():
+        outputs = context.user_data.model(**inputs)
+
+    # Post-process results
+    results = context.user_data.processor.post_process_instance_segmentation(
+        outputs,
+        threshold=0.5,
+        mask_threshold=0.5,
+        target_sizes=inputs.get("original_sizes").tolist(),
+    )[0]
+
+    detections = []
+
+    for score, box, mask in zip(results["scores"], results["boxes"], results["masks"]):
+        # must be in this format
+        detections.append(
+            {
+                "confidence": float(score),
+                "label": "person",
+                "points": box.tolist(),
+                "type": "rectangle",
+            }
+        )
+
+    return context.Response(
+        body=json.dumps(detections),
+        headers={},
+        content_type="application/json",
+        status_code=200,
+    )
