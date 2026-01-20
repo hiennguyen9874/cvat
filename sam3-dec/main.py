@@ -54,7 +54,7 @@ def init_context(context):
 
 # Inference endpoint
 def handler(context, event):
-    context.logger.info("Run custom yolov8 model")
+    context.logger.info("Run sam3 model - to detection")
     data = event.body
     image_buffer = io.BytesIO(base64.b64decode(data["image"]))
     image = cv2.imdecode(
